@@ -122,7 +122,9 @@ module AASM
       def aasm_fire_event(state_machine_name, name, options, *args, &block)
         return super unless aasm_supports_transactions? && options[:persist]
 
-        event = self.class.aasm(state_machine_name).state_machine.events[name]
+        state_machine = self.class.aasm(state_machine_name).state_machine
+
+        event = state_machine.events[name]
         event.fire_callbacks(:before_transaction, self, *args)
         event.fire_global_callbacks(:before_all_transactions, self, *args)
 
@@ -135,10 +137,13 @@ module AASM
             super
           end
 
-          if success && !(event.options.keys & [:after_commit, :after_all_commits]).empty?
-            aasm_execute_after_commit do
-              event.fire_callbacks(:after_commit, self, *args)
-              event.fire_global_callbacks(:after_all_commits, self, *args)
+          if success
+            has_commit_callback = event.options.keys.include?(:after_commit) || state_machine.global_callbacks.keys.include?(:after_all_commits)
+            if has_commit_callback
+              aasm_execute_after_commit do
+                event.fire_callbacks(:after_commit, self, *args)
+                event.fire_global_callbacks(:after_all_commits, self, *args)
+              end
             end
           end
 
